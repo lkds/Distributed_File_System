@@ -1,42 +1,84 @@
+import rpyc
 from rpyc import Service
 from rpyc.utils.server import ThreadedServer
+import os
+import argparse
 
-NameNode_Host = '127.0.0.1'
-NameNode_Port = 50000
-blocksize = 1024*1024*4
+NAMENODE_HOST = '127.0.0.1'
+NAMENODE_PORT = 50001
 
-Client_datapath = os.getcwd()+"/ClientSpace"
+BASE_DIR = str(os.getcwd()).replace('\\', '/')
+CLIENT_DATAPATH = BASE_DIR + '/ClientSpace/'
 
 
-class client(Service):
+class Client(Service):
     def __init__(self):
-        pass
-    #初次写文件建立文件副本
-    def clientSaveFile(self,filename):  
-        inputfile = open(Client_datapath+'/'+chunkname,'rb')#open the fromfile
+        self.blocksize = 1024*1024*4
+        if not os.path.exists(CLIENT_DATAPATH):
+            os.makedirs(CLIENT_DATAPATH)
+
+    def setBlockSize(self, size):
+        '''
+        设置单个文件块大小
+        '''
+        self.blockSize = size*1024*1024
+
+    def put(self, filename):
+        '''
+        保存文件
+        '''
+        try:
+            inputfile = open(CLIENT_DATAPATH+'/'+filename,
+                             'rb')  # open the fromfile
+        except Exception as e:
+            print(e)
+            return
         count = 0
         while True:
-            conn=rpyc.connect(NameNode_Host,NameNode_Port)
-            chunk = inputfile.read(blocksize)
-            if not chunk:             #check the chunk is empty
+            conn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
+            chunk = inputfile.read(self.blocksize)
+            if not chunk:  # check the chunk is empty
                 break
             count += 1
-            chunkname,DataNodeAlist=conn.root.savefile(filename,count)
+            chunkname, DataNodeAlist = conn.root.saveFile(filename, count)
             conn.close()
-            ######################################################
-            conn=rpyc.connect(DataAList[0][0],DataAList[0][1])
-            conn.root.copy(DataAList,count,chunk, chunkname)
+
+            ##########################向DataNode写入########################
+            conn = rpyc.connect(DataNodeAlist[0][0], DataNodeAlist[0][1])
+            conn.root.copy(DataNodeAlist, count, chunk, chunkname)
             conn.close()
-            #####################################################
-    #读取文件
-    def clientReadFile(self,filename):
-        conn=rpyc.connect(NameNode_Host,NameNode_Port)
-        blocks,DataNodes=conn.root.getFileInfo(filename)
+
+    def get(self, filename):
+        '''
+        获取文件
+        '''
+        conn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
+        blocks, DataNodes = conn.root.getFileInfo(filename)
         conn.close()
-        f= open(Client_datapath+'/'+filename, 'wb+')
-        for i in range(0,len(blocks)):
-            conn=rpyc.connect(DataNodes[i][0][0],(DataNodes[i][0][1])
+        f = open(CLIENT_DATAPATH+'/'+filename, 'wb+')
+        for i in range(0, len(blocks)):
+            conn = rpyc.connect(DataNodes[i][0][0], (DataNodes[i][0][1]))
             f.write(conn.root.read(blocks[i]))
             conn.close()
         f.close()
 
+    def delete(self, filename):
+        pass
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--put', type=str, default=None,
+                        help='put')
+    parser.add_argument('--get', type=str, default=None,
+                        help='get')
+    parser.add_argument('--delete', type=str, default=None,
+                        help='get')
+    args = parser.parse_args()
+    client = Client()
+    if (args.put):
+        client.put(args.put)
+    elif (args.get):
+        client.get(args.put)
+    elif (args.delete):
+        client.delete(args.delete)

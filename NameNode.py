@@ -8,11 +8,12 @@ import threading
 import logging
 from rpyc.utils.server import ThreadedServer
 
+# -----------------------------CONFIG------------------------------
 REDIS_ADDR = '47.113.123.159'
 REDIS_PORT = 6379
 
-RPYC_IP = '192.168.43.52'
-RPYC_PORT = 50000
+RPYC_IP = '127.0.0.1'
+RPYC_PORT = 50001
 
 ERR_CODE = {
     'CAN_NOT_CONNECT': 101,
@@ -23,6 +24,7 @@ DATE_FORMAT = "%m/%d/%Y %H:%M:%S %p"
 
 logging.basicConfig(filename='my.log', level=logging.DEBUG,
                     format=LOG_FORMAT, datefmt=DATE_FORMAT)
+# -----------------------------CONFIG------------------------------
 
 
 class NameNode(rpyc.Service):
@@ -63,11 +65,15 @@ class NameNode(rpyc.Service):
         '''
         while(self.isRunning):
             time.sleep(10)
-            allNode = self.r.smembers(self.allNodeSetName)
+            try:
+                allNode = self.r.smembers(self.allNodeSetName)
+            except Exception as e:
+                print(e)
+                continue
             currTime = time.time()
             for name in allNode:
                 nodeTime = self.r.hget(self.allNodeHashTime, name)
-                if nodeTime - currTime > 10:
+                if nodeTime and nodeTime - currTime > 10:
                     logging.log(logging.DEBUG, name +
                                 ' last avtive time '+nodeTime+', pop!')
                     self.r.srem(self.allNodeSetName, name)
@@ -76,27 +82,33 @@ class NameNode(rpyc.Service):
     def startUpdateNode(self):
         t1 = threading.Thread(target=self.updateNode)
         t1.start()
-        t1.join()
 
     def sortDataNode(self, nodeNameList):
         '''
         给传入的datanode排序
         nodeList:node 名 uuid
         '''
-        nodeList = [eval(self.r.hget(self.nodeHashName, nodeName))
-                    for nodeName in nodeNameList]
-        nodeList.sort(key=lambda x: self.isAlive(x))
-        return nodeList
+        # nodeList = [eval(self.r.hget(self.nodeHashName, nodeName))
+        #             for nodeName in nodeNameList]
+        if (len(nodeNameList) == 0):
+            return []
+        nodeNameList.sort(key=lambda x: self.isAlive(
+            self.r.hget(self.nodeHashName, x)))
+        return nodeNameList
 
     def getBestNode(self, count):
         '''
         获取最优节点，返回[ip,port]
         '''
         allNode = self.r.smembers(self.allNodeSetName)
-        res = set()
-        for i in range(count):
-            res.add(self.sortDataNode(allNode-res)[0])
-        return list(res)
+        res = []
+        try:
+            for i in range(count):
+                res.append(self.sortDataNode(list(allNode-set(res)))[0])
+            return res
+        except Exception as e:
+            print(e)
+            return res
 
     def exposed_setNode(self, nodeInfo):
         '''
@@ -141,10 +153,10 @@ class NameNode(rpyc.Service):
         count：int
         返回列表[[ip,port],[ip,port],[ip,port],...,[ip,port]],
         '''
-        blockName = fileName+'-block-'+str(count)
+        blockName = fileName + '-block-' + str(count)
         nodeList = self.getBestNode(self.replicationCount)
         self.r.zadd(fileName, count, blockName)
-        return blockName, nodeList
+        return blockName, [self.r.hget(self.nodeHashName, name) for name in nodeList]
 
     def exposed_writeCheck(self, nodeName, blockName):
         '''
