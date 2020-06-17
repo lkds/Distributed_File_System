@@ -105,23 +105,27 @@ class Client(Service):
             print('删除成功！')
 
 
-# if __name__ == "__main__":
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument('--put', type=str, default=None,
-#                         help='put')
-#     parser.add_argument('--get', type=str, default=None,
-#                         help='get')
-#     parser.add_argument('--delete', type=str, default=None,
-#                         help='get')
-#     args = parser.parse_args()
-#     client = Client()
-#     if (args.put):
-#         client.put(args.put)
-#     elif (args.get):
-#         client.get(args.get)
-#     elif (args.delete):
-#         client.delete(args.delete)
-client = Client()
-# client.get('abc.txt')
-# client.put('abc.txt')
-client.delete('1234.txt')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--put', type=str, default=None,
+                        help='put')
+    parser.add_argument('--get', type=str, default=None,
+                        help='get')
+    parser.add_argument('--delete', type=str, default=None,
+                        help='delete')
+    parser.add_argument('--ls', type=str, default=None,
+                        help='ls')
+    args = parser.parse_args()
+    client = Client()
+    if (args.put):
+        client.put(args.put)
+    elif (args.get):
+        client.get(args.get)
+    elif (args.delete):
+        client.delete(args.delete)
+    elif (args.ls):
+        client.delete(args.ls)
+# client = Client()
+# # client.get('abc.txt')
+# # client.put('abc.txt')
+# client.delete('1234.txt')

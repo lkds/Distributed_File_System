@@ -31,7 +31,7 @@ logging.basicConfig(filename='datanode.log', level=logging.DEBUG,
                     format=LOG_FORMAT, datefmt=DATE_FORMAT)
 # -------------------------------------------------
 
-nodeListDict = dict()  # 名称--线程
+NodeStatus = dict()  # 名称--线程
 
 
 class DataNode(Service):
@@ -42,6 +42,7 @@ class DataNode(Service):
         self.nodePort = nodePort
         self.chunkSize = 1024 * 1024 * 4
         self.path = DATANODE_PATH+'/'+nodeID+'/'
+
 
         # self.startHeartBeat()
 
@@ -104,6 +105,13 @@ class DataNode(Service):
             conn.root.copy(DataAList[1:], chunk, chunkname)
             conn.close()
 
+    def exposed_replicate(self,DataAList,chunkName):
+        f=open(self.path+chunkname, 'rb')
+        chunk = f.read()
+        conn = rpyc.connect(DataAList[0][0], DataAList[0][1])
+        conn.root.copy(DataAList, chunk, chunkname)
+        conn.close()
+        
 
 def startANode(nodeID, nodeIp, nodeport):
     '''
@@ -123,8 +131,12 @@ def startNodeThread(nodeID, nodeIp, nodeport):
     '''
     dataNode = classpartial(DataNode, nodeID, nodeIp, nodeport)
     t = ThreadedServer(dataNode, hostname=nodeIp, port=nodeport)
+    NodeStatus[nodeID].append(t)
     t.start()
-
+    
+def stopNodeThread(nodeID):
+    NodeStatus[nodeID][0]=False
+    NodeStatus[nodeID][1].close()
 
 def heatBeatThred(nodeinfo):
     '''
@@ -133,8 +145,11 @@ def heatBeatThred(nodeinfo):
     try:
         conn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
         while(True):
-            conn.root.setNode(nodeinfo)
-            time.sleep(10)
+            if NodeStatus[nodeinfo[0]][0] ==True: #
+                conn.root.setNode(nodeinfo)
+                time.sleep(10)
+            else:
+                break
     except:
         conn.close()
         logging.log(logging.DEBUG, 'namenode is dead！')
@@ -163,7 +178,10 @@ def registerNode():
         else:
             os.makedirs(nodePath)
         # 启动并注册
+        NodeStatus[node] = []
+        NodeStatus[node].append(True)
         startANode(node, ip, port)
+        
         port += 1
 
 
@@ -171,4 +189,6 @@ if __name__ == '__main__':
     print('DataNode starting.....')
     logging.log(logging.INFO, 'DataNode starting......')
     registerNode()
-    print('x')
+    while(True):
+        node = input()
+        stopNodeThread(node)
