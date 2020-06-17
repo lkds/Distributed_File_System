@@ -76,6 +76,9 @@ class DataNode(Service):
         f.close()
         return chunk
 
+    def exposed_delete(self, chunkname):
+        os.remove(self.path+chunkname)
+        
     # 写数据
     def write(self, chunk, chunkname):
         e = open(self.path+chunkname, 'wb+')

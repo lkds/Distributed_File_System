@@ -67,7 +67,21 @@ class Client(Service):
         conn.close()
 
     def delete(self, filename):
-        pass
+        '''
+        删除文件
+        '''
+        conn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
+        blocks, DataNodes = conn.root.getFileInfo(filename)
+        if (len(blocks) == 0):
+            print('文件不存在！')
+        f = open(CLIENT_DATAPATH+'/get/'+filename, 'wb+')
+        for i in range(0, len(blocks)):
+            conn2 = rpyc.connect(DataNodes[i][0][0], DataNodes[i][0][1])
+            f.write(conn2.root.delete(blocks[i]))
+            conn2.close()
+        f.close()
+        conn.close()
+
 
 
 # if __name__ == "__main__":
