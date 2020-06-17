@@ -8,8 +8,11 @@ import redis
 import threading
 import logging
 from rpyc.utils.server import ThreadPoolServer, ThreadedServer
+from rpyc import BgServingThread
 
 # -----------------------------CONFIG------------------------------
+REPLICATION_COUNT = 3
+
 REDIS_ADDR = '47.113.123.159'
 REDIS_PORT = 6379
 
@@ -27,11 +30,17 @@ logging.basicConfig(filename='my.log', level=logging.DEBUG,
                     format=LOG_FORMAT, datefmt=DATE_FORMAT)
 # -----------------------------CONFIG------------------------------
 
+server = None
+
+
+def stopServer():
+    server.close()
+
 
 class NameNode(rpyc.Service):
-    def __init__(self, count=3):
+    def __init__(self):
         self.isRunning = True
-        self.replicationCount = count
+        self.replicationCount = REPLICATION_COUNT
         # redis的hash name
         self.nodeHashName = 'node'
         self.allNodeSetName = 'DNode'
@@ -58,7 +67,7 @@ class NameNode(rpyc.Service):
             self.shortDisconnect(conn)
             return res
         except:
-            return ERR_CODE['CAN_NOT_CONNECT']
+            logging.log(logging.DEBUG, 'Connection failed！')
 
     def updateNode(self):
         '''
@@ -76,6 +85,7 @@ class NameNode(rpyc.Service):
                 nodeTime = self.r.hget(self.allNodeHashTime, name)
                 if nodeTime == None or currTime - float(nodeTime) > 20:
                     logging.log(logging.DEBUG, name + 'pop!')
+                    self.copyToOtherNodes(name)
                     self.r.srem(self.allNodeSetName, name)
                     self.r.hdel(self.allNodeHashTime, name)
 
@@ -86,21 +96,21 @@ class NameNode(rpyc.Service):
     def sortDataNode(self, nodeNameList):
         '''
         给传入的datanode排序
-        nodeList:node 名 uuid
+        nodeList:node 名
+        返回按照最优排序的节点名
         '''
         # nodeList = [eval(self.r.hget(self.nodeHashName, nodeName))
         #             for nodeName in nodeNameList]
         if (len(nodeNameList) == 0):
             return []
-        nodeNameList.sort(key=lambda x: self.isAlive(
-            self.r.hget(self.nodeHashName, x)))
+        nodeNameList.sort(key=lambda x: self.isAlive(self.getNodeInfo(x)))
         return nodeNameList
 
     def getBestNode(self, count):
         '''
         获取最优节点，返回[ip,port]
         '''
-        allNode = self.r.smembers(self.allNodeSetName)
+        allNode = set(self.getAllNodeName())
         res = []
         try:
             for i in range(count):
@@ -129,12 +139,71 @@ class NameNode(rpyc.Service):
         self.r.sadd(self.allNodeSetName, nodeName)
         self.r.hset(self.allNodeHashTime, nodeName, time.time())
 
+    def getAllNodeName(self):
+        '''
+         返回所有的有效结点
+        '''
+        return list(self.r.smembers(self.allNodeSetName))
+
+    def getNodeInfo(self, nodeName):
+        '''
+        获取一个node的IP和port
+        '''
+        return eval(self.r.hget(self.nodeHashName, nodeName))
+
+    def getNodesInfo(self, nodeNameList):
+        '''
+        获取一组nodeName的info
+        '''
+        return [self.getNodeInfo(node) for node in nodeNameList]
+
+    def getChunkNodeName(self, chunkName):
+        '''
+        输入chunk列表，返回存储该chunk的所有nodeName
+        '''
+        return list(self.r.smembers(chunkName))
+
     def getChunkNode(self, chunkName):
         '''
-        从chunkName得到节点
+        从chunkName得到节点信息[[ip,port],[xx,xx],,,,[xx,xx]]
         '''
-        return [eval(self.r.hget(self.nodeHashName, node))
-                for node in list(self.r.smembers(chunkName))]
+        return [self.getNodeInfo(node) for node in self.getChunkNodeName(chunkName)]
+
+    def getNodeBlocks(self, nodeName):
+        '''
+        获取一个节点存储的所有block
+        '''
+        return list(self.r.smembers(nodeName))
+
+    def getBlockNodes(self, block):
+        '''
+        获取一个block的所有结点分布
+        '''
+        return list(self.r.smembers(block))
+
+    def getRestNode(self, block):
+        '''
+        获取不含有block的结点列表，按照优先级排序
+        '''
+        nodeNameList = list(set(self.getAllNodeName()) -
+                            set(self.getBlockNodes(block)))
+        sortedNodeNameList = self.sortDataNode(nodeNameList)
+        sortedNodeNameInfo = self.getNodesInfo(sortedNodeNameList)
+        return sortedNodeNameInfo
+
+    def copyToOtherNodes(self, nodeName):
+        '''
+        将一个结点的文件拷贝到其它结点
+        最大程度拷贝，当结点不足时不拷贝
+        '''
+        blockList = self.getNodeBlocks(nodeName)
+        for block in blockList:
+            if(len(self.getBlockNodes(block)) < self.replicationCount):
+                restNode = self.getRestNode(block)
+                restNodeInfo = self.getNodesInfo(restNode)
+                originNode = self.getNodeInfo(self.getBlockNodes(block)[0])
+                conn = rpyc.connect(originNode[0], originNode[1])
+                conn.root.relicate(restNodeInfo, block)
 
     def exposed_getFileInfo(self, fileName):
         '''
@@ -164,6 +233,7 @@ class NameNode(rpyc.Service):
         if (self.r.exists(fileName)):
             blockList = self.r.zrevrange(fileName, 0, -1)
             return blockList[count], self.getChunkNode(blockList[count])
+        self.r.sadd('savedFile', fileName)
         blockName = fileName + '-block-' + str(count)
         nodeList = self.getBestNode(self.replicationCount)
         self.r.zadd(fileName, count, blockName)
@@ -173,17 +243,16 @@ class NameNode(rpyc.Service):
 
     def exposed_writeCheck(self, nodeName, blockName):
         '''
+        存储每个file的block被存储到哪些节点
+        每个节点存储了哪些block
         nodeName:uuid
         blockName:str
         '''
         self.r.sadd(blockName, nodeName)
+        self.r.sadd(nodeName, blockName)
 
     def on_disconnect(self, conn):
         conn.close()
-        try:
-            sys.exit()
-        except:
-            SystemExit()
 
 
 if __name__ == '__main__':
