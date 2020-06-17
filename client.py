@@ -41,11 +41,11 @@ class Client(Service):
                 break
             count += 1
             chunkname, DataNodeAlist = conn.root.saveFile(filename, count)
-            conn.close()
 
             ##########################向DataNode写入########################
-            conn = rpyc.connect(DataNodeAlist[0][0], DataNodeAlist[0][1])
-            conn.root.copy(DataNodeAlist, count, chunk, chunkname)
+            con = rpyc.connect(DataNodeAlist[0][0], DataNodeAlist[0][1])
+            con.root.copy(DataNodeAlist, chunk, chunkname)
+            con.close()
             conn.close()
 
     def get(self, filename):
@@ -66,19 +66,22 @@ class Client(Service):
         pass
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--put', type=str, default=None,
-                        help='put')
-    parser.add_argument('--get', type=str, default=None,
-                        help='get')
-    parser.add_argument('--delete', type=str, default=None,
-                        help='get')
-    args = parser.parse_args()
-    client = Client()
-    if (args.put):
-        client.put(args.put)
-    elif (args.get):
-        client.get(args.put)
-    elif (args.delete):
-        client.delete(args.delete)
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument('--put', type=str, default=None,
+#                         help='put')
+#     parser.add_argument('--get', type=str, default=None,
+#                         help='get')
+#     parser.add_argument('--delete', type=str, default=None,
+#                         help='get')
+#     args = parser.parse_args()
+#     client = Client()
+#     if (args.put):
+#         client.put(args.put)
+#     elif (args.get):
+#         client.get(args.put)
+#     elif (args.delete):
+#         client.delete(args.delete)
+
+client = Client()
+client.put('a')

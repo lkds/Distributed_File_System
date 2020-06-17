@@ -73,9 +73,8 @@ class NameNode(rpyc.Service):
             currTime = time.time()
             for name in allNode:
                 nodeTime = self.r.hget(self.allNodeHashTime, name)
-                if nodeTime and nodeTime - currTime > 10:
-                    logging.log(logging.DEBUG, name +
-                                ' last avtive time '+nodeTime+', pop!')
+                if nodeTime == None or currTime - float(nodeTime) > 20:
+                    logging.log(logging.DEBUG, name + 'pop!')
                     self.r.srem(self.allNodeSetName, name)
                     self.r.hdel(self.allNodeHashTime, name)
 
@@ -120,6 +119,7 @@ class NameNode(rpyc.Service):
         nodePort = nodeInfo[2]
         self.r.sadd(self.allNodeSetName, nodeName)
         self.r.hset(self.nodeHashName, nodeName, [nodeIP, nodePort])
+        self.r.hset(self.allNodeHashTime, nodeName, time.time())
 
     def exposed_activateNode(self, nodeName):
         '''
@@ -156,7 +156,9 @@ class NameNode(rpyc.Service):
         blockName = fileName + '-block-' + str(count)
         nodeList = self.getBestNode(self.replicationCount)
         self.r.zadd(fileName, count, blockName)
-        return blockName, [self.r.hget(self.nodeHashName, name) for name in nodeList]
+        nodeInfoList = [eval(self.r.hget(self.nodeHashName, name))
+                        for name in nodeList]
+        return blockName, nodeInfoList
 
     def exposed_writeCheck(self, nodeName, blockName):
         '''
