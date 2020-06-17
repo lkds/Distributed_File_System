@@ -108,13 +108,13 @@ class Client(Service):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--put', type=str, default=None,
-                        help='put')
-    parser.add_argument('--get', type=str, default=None,
-                        help='get')
-    parser.add_argument('--delete', type=str, default=None,
-                        help='delete')
+                        help='put the file int cluster')
     parser.add_argument('--ls', type=str, default=None,
-                        help='ls')
+                        help='ls')                
+    parser.add_argument('--get', type=str, default=None,
+                        help='get file from cluster')
+    parser.add_argument('--dele', type=str, default=None,
+                        help='delete file in the cluster')
     args = parser.parse_args()
     client = Client()
     if (args.put):
@@ -122,10 +122,9 @@ if __name__ == "__main__":
     elif (args.get):
         client.get(args.get)
     elif (args.delete):
-        client.delete(args.delete)
+        client.delete(args.dele)
     elif (args.ls):
         client.delete(args.ls)
-# client = Client()
-# # client.get('abc.txt')
-# # client.put('abc.txt')
-# client.delete('1234.txt')
+
+
+
