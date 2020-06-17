@@ -133,7 +133,8 @@ class NameNode(rpyc.Service):
         '''
         从chunkName得到节点
         '''
-        return
+        return [eval(self.r.hget(self.nodeHashName, node))
+                for node in list(self.r.smembers(chunkName))]
 
     def exposed_getFileInfo(self, fileName):
         '''
@@ -145,14 +146,14 @@ class NameNode(rpyc.Service):
             ...
         ]
         '''
-        res = []
+        sortedNodeList = []
         blockList = []
         if (self.r.exists(fileName)):
             blockList = self.r.zrevrange(fileName, 0, -1)
             for block in blockList:
                 nodeList = list(self.r.smembers(block))
-                res.append(self.sortDataNode(nodeList))
-        return blockList, res
+                sortedNodeList.append(self.sortDataNode(nodeList))
+        return blockList, [[eval(self.r.hget(self.nodeHashName, node)) for node in blockNode] for blockNode in sortedNodeList]
 
     def exposed_saveFile(self, fileName, count):
         '''
@@ -162,9 +163,7 @@ class NameNode(rpyc.Service):
         '''
         if (self.r.exists(fileName)):
             blockList = self.r.zrevrange(fileName, 0, -1)
-            nodeList = [eval(self.r.hget(self.nodeHashName, node))
-                        for node in list(self.r.smembers(blockList[count]))]
-            return blockList[count], nodeList
+            return blockList[count], self.getChunkNode(blockList[count])
         blockName = fileName + '-block-' + str(count)
         nodeList = self.getBestNode(self.replicationCount)
         self.r.zadd(fileName, count, blockName)

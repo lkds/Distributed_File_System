@@ -77,9 +77,15 @@ class DataNode(Service):
         return chunk
 
     def exposed_delete(self, chunkname):
-        os.remove(self.path+chunkname)
-        
+        try:
+            os.remove(self.path + chunkname)
+            return {'status': 1, 'description': 'Successfully delete {}'.format(chunkname)}
+        except:
+            logging.log(logging.DEBUG, 'try to remove file not exits!')
+            return {'status': 1, 'description': 'Chunk {} not exits!'.format(chunkname)}
+
     # 写数据
+
     def write(self, chunk, chunkname):
         e = open(self.path+chunkname, 'wb+')
         e.write(chunk)
@@ -107,6 +113,8 @@ def startANode(nodeID, nodeIp, nodeport):
     t.start()
     t2 = Thread(target=heatBeatThred, args=([nodeID, nodeIp, nodeport],))
     t2.start()
+    logging.log(
+        logging.INFO, '{}-{}-{} register!'.format(nodeID, nodeIp, nodeport))
 
 
 def startNodeThread(nodeID, nodeIp, nodeport):
@@ -151,7 +159,7 @@ def registerNode():
         # 创建数据节点储存空间
         nodePath = DATANODE_PATH+'/'+node
         if os.path.exists(nodePath):
-            print('已存在')
+            logging.log(logging.INFO, '{} already exits'.format(nodePath))
         else:
             os.makedirs(nodePath)
         # 启动并注册
@@ -161,5 +169,6 @@ def registerNode():
 
 if __name__ == '__main__':
     print('DataNode starting.....')
+    logging.log(logging.INFO, 'DataNode starting......')
     registerNode()
     print('x')

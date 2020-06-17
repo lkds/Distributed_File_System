@@ -60,7 +60,22 @@ class Client(Service):
             print('文件不存在！')
         f = open(CLIENT_DATAPATH+'/get/'+filename, 'wb+')
         for i in range(0, len(blocks)):
-            conn2 = rpyc.connect(DataNodes[i][0][0], DataNodes[i][0][1])
+            currNode = 0
+            while (True):
+                try:
+                    conn2 = rpyc.connect(
+                        DataNodes[i][currNode][0], DataNodes[i][currNode][1])
+                    break
+                except:
+                    currNode += 1
+                    if (currNode >= len(blocks)):
+                        print('节点连接失败！')
+                        conn2.close()
+                        f.close()
+                        conn.close()
+                        return
+                    print('节点{}连接失败，重试...'.format(currNode))
+                    continue
             f.write(conn2.root.read(blocks[i]))
             conn2.close()
         f.close()
@@ -74,14 +89,20 @@ class Client(Service):
         blocks, DataNodes = conn.root.getFileInfo(filename)
         if (len(blocks) == 0):
             print('文件不存在！')
-        f = open(CLIENT_DATAPATH+'/get/'+filename, 'wb+')
+            return
+        status = True
         for i in range(0, len(blocks)):
-            conn2 = rpyc.connect(DataNodes[i][0][0], DataNodes[i][0][1])
-            f.write(conn2.root.delete(blocks[i]))
-            conn2.close()
-        f.close()
+            for node in DataNodes[i]:
+                conn2 = rpyc.connect(node[0], node[1])
+                res = conn2.root.delete(blocks[i])
+                if (res['status'] == 0):
+                    status = False
+                conn2.close()
         conn.close()
-
+        if (not status):
+            print('删除失败！详情查看DataNode日志')
+        else:
+            print('删除成功！')
 
 
 # if __name__ == "__main__":
@@ -100,8 +121,7 @@ class Client(Service):
 #         client.get(args.get)
 #     elif (args.delete):
 #         client.delete(args.delete)
-
 client = Client()
-client.get('a')
-# client = Client()
+# client.get('abc.txt')
 # client.put('abc.txt')
+client.delete('1234.txt')
