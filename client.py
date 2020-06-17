@@ -16,6 +16,8 @@ class Client(Service):
         self.blocksize = 1024*1024*4
         if not os.path.exists(CLIENT_DATAPATH):
             os.makedirs(CLIENT_DATAPATH)
+        if not os.path.exists(CLIENT_DATAPATH+'/get'):
+            os.makedirs(CLIENT_DATAPATH+'/get')
 
     def setBlockSize(self, size):
         '''
@@ -38,10 +40,10 @@ class Client(Service):
             conn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
             chunk = inputfile.read(self.blocksize)
             if not chunk:  # check the chunk is empty
+                inputfile.close()
                 break
-            count += 1
             chunkname, DataNodeAlist = conn.root.saveFile(filename, count)
-
+            count += 1
             ##########################向DataNode写入########################
             con = rpyc.connect(DataNodeAlist[0][0], DataNodeAlist[0][1])
             con.root.copy(DataNodeAlist, chunk, chunkname)
@@ -54,13 +56,15 @@ class Client(Service):
         '''
         conn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
         blocks, DataNodes = conn.root.getFileInfo(filename)
-        conn.close()
-        f = open(CLIENT_DATAPATH+'/'+filename, 'wb+')
+        if (len(blocks) == 0):
+            print('文件不存在！')
+        f = open(CLIENT_DATAPATH+'/get/'+filename, 'wb+')
         for i in range(0, len(blocks)):
-            conn = rpyc.connect(DataNodes[i][0][0], (DataNodes[i][0][1]))
-            f.write(conn.root.read(blocks[i]))
-            conn.close()
+            conn2 = rpyc.connect(DataNodes[i][0][0], DataNodes[i][0][1])
+            f.write(conn2.root.read(blocks[i]))
+            conn2.close()
         f.close()
+        conn.close()
 
     def delete(self, filename):
         pass
@@ -79,9 +83,11 @@ class Client(Service):
 #     if (args.put):
 #         client.put(args.put)
 #     elif (args.get):
-#         client.get(args.put)
+#         client.get(args.get)
 #     elif (args.delete):
 #         client.delete(args.delete)
 
 client = Client()
-client.put('a')
+client.get('a')
+# client = Client()
+# client.put('abc.txt')

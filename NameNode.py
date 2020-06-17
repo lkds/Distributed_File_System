@@ -1,12 +1,13 @@
 import rpyc
 import os
+import sys
 import time
 import argparse
 import json
 import redis
 import threading
 import logging
-from rpyc.utils.server import ThreadedServer
+from rpyc.utils.server import ThreadPoolServer, ThreadedServer
 
 # -----------------------------CONFIG------------------------------
 REDIS_ADDR = '47.113.123.159'
@@ -128,6 +129,12 @@ class NameNode(rpyc.Service):
         self.r.sadd(self.allNodeSetName, nodeName)
         self.r.hset(self.allNodeHashTime, nodeName, time.time())
 
+    def getChunkNode(self, chunkName):
+        '''
+        从chunkName得到节点
+        '''
+        return
+
     def exposed_getFileInfo(self, fileName):
         '''
         获取文件的块和分布，并且按照延时排序
@@ -153,6 +160,11 @@ class NameNode(rpyc.Service):
         count：int
         返回列表[[ip,port],[ip,port],[ip,port],...,[ip,port]],
         '''
+        if (self.r.exists(fileName)):
+            blockList = self.r.zrevrange(fileName, 0, -1)
+            nodeList = [eval(self.r.hget(self.nodeHashName, node))
+                        for node in list(self.r.smembers(blockList[count]))]
+            return blockList[count], nodeList
         blockName = fileName + '-block-' + str(count)
         nodeList = self.getBestNode(self.replicationCount)
         self.r.zadd(fileName, count, blockName)
@@ -167,11 +179,18 @@ class NameNode(rpyc.Service):
         '''
         self.r.sadd(blockName, nodeName)
 
+    def on_disconnect(self, conn):
+        conn.close()
+        try:
+            sys.exit()
+        except:
+            SystemExit()
+
 
 if __name__ == '__main__':
 
     server = ThreadedServer(NameNode, hostname=RPYC_IP, port=RPYC_PORT)
     try:
         server.start()
-    except KeyboardInterrupt:
+    except Exception:
         server.close()

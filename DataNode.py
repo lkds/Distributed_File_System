@@ -19,7 +19,7 @@ DATANODE_HOST = '127.0.0.1'
 DATANODE_START_PORT = 50002
 
 BASE_DIR = str(os.getcwd()).replace('\\', '/')
-DATA_DATAPATH = BASE_DIR+"/DataNode"
+DATANODE_PATH = BASE_DIR+"/DataNode"
 
 # 节点列表
 # node1 node2 node3
@@ -40,17 +40,15 @@ class DataNode(Service):
         self.nodeID = nodeID
         self.nodeIP = nodeIP
         self.nodePort = nodePort
-        self.chunkSize = 1024*1024*4
-        # 初次上线，向NameNode注册
-        if not os.path.exists(DATA_DATAPATH):
-            os.makedirs(DATA_DATAPATH)
+        self.chunkSize = 1024 * 1024 * 4
+        self.path = DATANODE_PATH+'/'+nodeID+'/'
 
         # self.startHeartBeat()
 
     # 获取自己的网络状况
     def getstatus(self):
 
-        return random.randint(0, 100)+len(os.listdir(DATA_DATAPATH))
+        return random.randint(0, 100)+len(os.listdir(DATANODE_PATH))
 
     # def heartBeat(self):
     #     '''
@@ -73,14 +71,14 @@ class DataNode(Service):
     # 读数据
 
     def exposed_read(self, chunkname):
-        f = open(DATA_DATAPATH+'/'+self.nodeID+chunkname, 'rb')
+        f = open(self.path+chunkname, 'rb')
         chunk = f.read()
         f.close()
         return chunk
 
     # 写数据
     def write(self, chunk, chunkname):
-        e = open(DATA_DATAPATH+'/'+self.nodeID+chunkname, 'wb+')
+        e = open(self.path+chunkname, 'wb+')
         e.write(chunk)
         e.close()
     # 将信息拷贝到下一个DataNode
@@ -106,7 +104,6 @@ def startANode(nodeID, nodeIp, nodeport):
     t.start()
     t2 = Thread(target=heatBeatThred, args=([nodeID, nodeIp, nodeport],))
     t2.start()
-    nodeListDict[nodeID] = [t, t2]
 
 
 def startNodeThread(nodeID, nodeIp, nodeport):
@@ -123,12 +120,12 @@ def heatBeatThred(nodeinfo):
     发送心跳包
     '''
     try:
+        conn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
         while(True):
-            conn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
             conn.root.setNode(nodeinfo)
-            conn.close()
             time.sleep(10)
     except:
+        conn.close()
         logging.log(logging.DEBUG, 'namenode is dead！')
 
 
@@ -145,15 +142,17 @@ def registerNode():
     print(namelist)
     # 读完名字
     # 2.向datanode注册并创建线程
-    port = 50002
-    for DEVICE_ID in namelist:
+    port = DATANODE_START_PORT
+    ip = DATANODE_HOST
+    for node in namelist:
         # 创建数据节点储存空间
-        if os.path.exists(DATA_DATAPATH+'./'+DEVICE_ID):
+        nodePath = DATANODE_PATH+'/'+node
+        if os.path.exists(nodePath):
             print('已存在')
         else:
-            os.mkdir(DATA_DATAPATH+'./'+DEVICE_ID)
+            os.makedirs(nodePath)
         # 启动并注册
-        startANode(DEVICE_ID, DATANODE_HOST, port)
+        startANode(node, ip, port)
         port += 1
 
 
