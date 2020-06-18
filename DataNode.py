@@ -43,7 +43,6 @@ class DataNode(Service):
         self.chunkSize = 1024 * 1024 * 4
         self.path = DATANODE_PATH+'/'+nodeID+'/'
 
-
         # self.startHeartBeat()
 
     # 获取自己的网络状况
@@ -105,13 +104,13 @@ class DataNode(Service):
             conn.root.copy(DataAList[1:], chunk, chunkname)
             conn.close()
 
-    def exposed_replicate(self,DataAList,chunkName):
-        f=open(self.path+chunkname, 'rb')
+    def exposed_replicate(self, DataAList, chunkname):
+        f = open(self.path+chunkname, 'rb')
         chunk = f.read()
         conn = rpyc.connect(DataAList[0][0], DataAList[0][1])
         conn.root.copy(DataAList, chunk, chunkname)
         conn.close()
-        
+
 
 def startANode(nodeID, nodeIp, nodeport):
     '''
@@ -133,10 +132,12 @@ def startNodeThread(nodeID, nodeIp, nodeport):
     t = ThreadedServer(dataNode, hostname=nodeIp, port=nodeport)
     NodeStatus[nodeID].append(t)
     t.start()
-    
+
+
 def stopNodeThread(nodeID):
-    NodeStatus[nodeID][0]=False
+    NodeStatus[nodeID][0] = False
     NodeStatus[nodeID][1].close()
+
 
 def heatBeatThred(nodeinfo):
     '''
@@ -145,7 +146,7 @@ def heatBeatThred(nodeinfo):
     try:
         conn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
         while(True):
-            if NodeStatus[nodeinfo[0]][0] ==True: #
+            if NodeStatus[nodeinfo[0]][0] == True:
                 conn.root.setNode(nodeinfo)
                 time.sleep(10)
             else:
@@ -181,7 +182,7 @@ def registerNode():
         NodeStatus[node] = []
         NodeStatus[node].append(True)
         startANode(node, ip, port)
-        
+
         port += 1
 
 

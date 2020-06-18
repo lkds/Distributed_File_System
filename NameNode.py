@@ -85,9 +85,9 @@ class NameNode(rpyc.Service):
                 nodeTime = self.r.hget(self.allNodeHashTime, name)
                 if nodeTime == None or currTime - float(nodeTime) > 20:
                     logging.log(logging.DEBUG, name + 'pop!')
-                    self.copyToOtherNodes(name)
                     self.r.srem(self.allNodeSetName, name)
                     self.r.hdel(self.allNodeHashTime, name)
+                    self.copyToOtherNodes(name)
 
     def startUpdateNode(self):
         t1 = threading.Thread(target=self.updateNode)
@@ -198,12 +198,12 @@ class NameNode(rpyc.Service):
         '''
         blockList = self.getNodeBlocks(nodeName)
         for block in blockList:
-            if(len(self.getBlockNodes(block)) < self.replicationCount):
+            if(len(list(set(self.getAllNodeName()) & set(self.getBlockNodes(block)))) < self.replicationCount):
                 restNode = self.getRestNode(block)
-                restNodeInfo = self.getNodesInfo(restNode)
                 originNode = self.getNodeInfo(self.getBlockNodes(block)[0])
                 conn = rpyc.connect(originNode[0], originNode[1])
-                conn.root.relicate(restNodeInfo, block)
+                conn.root.replicate(restNode, block)
+                conn.close()
 
     def exposed_getFileInfo(self, fileName):
         '''
@@ -253,7 +253,6 @@ class NameNode(rpyc.Service):
 
     def on_disconnect(self, conn):
         conn.close()
-
 
 
 if __name__ == '__main__':
