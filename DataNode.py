@@ -18,6 +18,8 @@ NAMENODE_PORT = 50001
 DATANODE_HOST = '127.0.0.1'
 DATANODE_START_PORT = 50002
 
+
+
 BASE_DIR = str(os.getcwd()).replace('\\', '/')
 DATANODE_PATH = BASE_DIR+"/DataNode"
 
@@ -36,6 +38,7 @@ logging.basicConfig(filename='datanode.log', level=logging.DEBUG,
 NodeStatus = dict()  # 名称--线程
 
 
+port = DATANODE_START_PORT
 class DataNode(Service):
 
     def __init__(self, nodeID, nodeIP, nodePort):
@@ -138,6 +141,22 @@ def startNodeThread(nodeID, nodeIp, nodeport):
     NodeStatus[nodeID].append(t)
     t.start()
 
+def addNodeThread(nodeID):
+    global port
+    ip = DATANODE_HOST
+    # 创建数据节点储存空间
+    nodePath = DATANODE_PATH+'/'+node
+    if os.path.exists(nodePath):
+        logging.log(logging.INFO, '{} already exits'.format(nodePath))
+    else:
+        os.makedirs(nodePath)
+    # 启动并注册
+    NodeStatus[node] = []
+    NodeStatus[node].append(True)
+    startANode(node, ip, port)
+
+    port += 1
+
 
 def stopNodeThread(nodeID):
     NodeStatus[nodeID][0] = False
@@ -165,6 +184,7 @@ def registerNode():
     """
     注册节点，向namenode发送所有ID，IP PORT
     """
+    global port
     # 1.读取名字
     namelist = []
     with open(DEVICE_ID_FILE, 'r') as f:
@@ -174,7 +194,6 @@ def registerNode():
     print(namelist)
     # 读完名字
     # 2.向datanode注册并创建线程
-    port = DATANODE_START_PORT
     ip = DATANODE_HOST
     for node in namelist:
         # 创建数据节点储存空间
@@ -196,5 +215,15 @@ if __name__ == '__main__':
     logging.log(logging.INFO, 'DataNode starting......')
     registerNode()
     while(True):
-        node = input()
-        stopNodeThread(node)
+        print("添加和删除节点：1.添加节点   2.删除节点")
+        n = input()
+        if(n=='1'):
+            print("输入节点名：格式如（node1）")
+            node = input()
+            addNodeThread(node)
+        elif(n=='2'):
+            print("输入节点名：格式如（node1）")
+            node = input()
+            stopNodeThread(node)
+        else:
+            print("输入有误")
