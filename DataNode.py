@@ -19,7 +19,6 @@ DATANODE_HOST = '127.0.0.1'
 DATANODE_START_PORT = 50002
 
 
-
 BASE_DIR = str(os.getcwd()).replace('\\', '/')
 DATANODE_PATH = BASE_DIR+"/DataNode"
 
@@ -39,6 +38,8 @@ NodeStatus = dict()  # 名称--线程
 
 
 port = DATANODE_START_PORT
+
+
 class DataNode(Service):
 
     def __init__(self, nodeID, nodeIP, nodePort):
@@ -141,6 +142,7 @@ def startNodeThread(nodeID, nodeIp, nodeport):
     NodeStatus[nodeID].append(t)
     t.start()
 
+
 def addNodeThread(nodeID):
     global port
     ip = DATANODE_HOST
@@ -167,17 +169,19 @@ def heatBeatThred(nodeinfo):
     '''
     发送心跳包
     '''
-    try:
-        conn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
-        while(True):
+    while(True):
+        try:
+            conn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
+
             if NodeStatus[nodeinfo[0]][0] == True:
                 conn.root.setNode(nodeinfo)
                 time.sleep(10)
             else:
+                conn.close()
                 break
-    except:
-        conn.close()
-        logging.log(logging.DEBUG, 'namenode is dead！')
+        except:
+            time.sleep(10)
+            logging.log(logging.DEBUG, 'namenode is dead！')
 
 
 def registerNode():
@@ -217,11 +221,11 @@ if __name__ == '__main__':
     while(True):
         print("添加和删除节点：1.添加节点   2.删除节点")
         n = input()
-        if(n=='1'):
+        if(n == '1'):
             print("输入节点名：格式如（node1）")
             node = input()
             addNodeThread(node)
-        elif(n=='2'):
+        elif(n == '2'):
             print("输入节点名：格式如（node1）")
             node = input()
             stopNodeThread(node)

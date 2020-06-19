@@ -4,7 +4,8 @@ from rpyc.utils.server import ThreadedServer
 import os
 import argparse
 
-NAMENODE_HOST = '127.0.0.1'
+# NAMENODE_HOST = '127.0.0.1'
+NAMENODE_HOST = '192.168.43.52'
 NAMENODE_PORT = 50001
 
 CHUNK_SIZE = 4
@@ -136,6 +137,11 @@ class Client(Service):
                            [*zip(*[fileInfo[0], *zip(*fileInfo[1])])])
         # print(fileInfo)
 
+    def reset(self):
+        con = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
+        con.root.reset()
+        con.close()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -147,6 +153,8 @@ if __name__ == "__main__":
                         help='get file from cluster')
     parser.add_argument('--dele', type=str, default=None,
                         help='delete file in the cluster')
+    parser.add_argument('--reset', type=str, default=None,
+                        help='reset the cluster')
     args = parser.parse_args()
     client = Client()
     if (args.put):
@@ -157,6 +165,8 @@ if __name__ == "__main__":
         client.delete(args.dele)
     elif (args.ls):
         client.listFiles(args.ls)
+    elif (args.reset):
+        client.reset()
 
 # client = Client()
 # client.put('v.zip')

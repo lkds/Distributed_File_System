@@ -16,7 +16,8 @@ REPLICATION_COUNT = 3
 REDIS_ADDR = '47.113.123.159'
 REDIS_PORT = 6379
 
-RPYC_IP = '127.0.0.1'
+# RPYC_IP = '127.0.0.1'
+RPYC_IP = '192.168.43.52'
 RPYC_PORT = 50001
 
 ERR_CODE = {
@@ -227,14 +228,14 @@ class NameNode(rpyc.Service):
             if(len(list(set(self.getAllNodeName()) & set(self.getBlockNodes(block)))) < self.replicationCount):
                 restNode = self.getRestNode(block)
                 originNodes = self.getBestLiveNodes(block)
-                if (len(originNodes) == 0):
+                if (len(originNodes) == 0 or len(restNode) == 0):
                     logging.log(
                         logging.DEBUG, 'Living Node not enough, stop replicate for {}'.format(block))
                     break
                 originNode = originNodes[0]
                 originNodeInfo = self.getNodeInfo(originNode)
                 conn = rpyc.connect(originNodeInfo[0], originNodeInfo[1])
-                conn.root.replicate(restNode, block)
+                conn.root.replicate([restNode[0]], block)
                 conn.close()
 
     def exposed_getFileInfo(self, fileName):
@@ -314,6 +315,12 @@ class NameNode(rpyc.Service):
         elif (node == 'node'):
             allNodeName = self.getAllNodeName()
             return [allNodeName, [self.getNodeInfo(name) for name in allNodeName]]
+
+    def exposed_reset(self):
+        '''
+        恢复集群到初始状态，不删除文件
+        '''
+        self.r.flushdb()
 
     def on_disconnect(self, conn):
         conn.close()
