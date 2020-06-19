@@ -30,12 +30,6 @@ logging.basicConfig(filename='my.log', level=logging.DEBUG,
                     format=LOG_FORMAT, datefmt=DATE_FORMAT)
 # -----------------------------CONFIG------------------------------
 
-server = None
-
-
-def stopServer():
-    server.close()
-
 
 class NameNode(rpyc.Service):
     def __init__(self):
@@ -45,6 +39,7 @@ class NameNode(rpyc.Service):
         self.nodeHashName = 'node'
         self.allNodeSetName = 'DNode'
         self.allNodeHashTime = 'DNodeTime'
+        self.savedSetFile = 'savedFile'
         # 初始化本地缓存库
         self.r = redis.StrictRedis(
             host=REDIS_ADDR, port=REDIS_PORT, db=0, decode_responses=True)
@@ -145,6 +140,12 @@ class NameNode(rpyc.Service):
         '''
         return list(self.r.smembers(self.allNodeSetName))
 
+    def getAllFileName(self):
+        '''
+        获取所有存储的文件
+        '''
+        return list(self.r.smembers(self.savedSetFile))
+
     def getNodeInfo(self, nodeName):
         '''
         获取一个node的IP和port
@@ -156,6 +157,12 @@ class NameNode(rpyc.Service):
         获取一组nodeName的info
         '''
         return [self.getNodeInfo(node) for node in nodeNameList]
+
+    def getFileChunks(self, fileName):
+        '''
+        获取一个文件的所有chunk
+        '''
+        return list(self.r.zrange(fileName, 0, -1))
 
     def getChunkNodeName(self, chunkName):
         '''
@@ -180,6 +187,13 @@ class NameNode(rpyc.Service):
         获取一个block的所有结点分布
         '''
         return list(self.r.smembers(block))
+
+    def getBlockLiveNodes(self, block):
+        '''
+        获取一个block的有效结点个数
+        '''
+        allNodes = self.getBlockNodes(block)
+        return list(set(self.getAllNodeName()) & set(allNodes))
 
     def getRestNode(self, block):
         '''
@@ -217,12 +231,13 @@ class NameNode(rpyc.Service):
         '''
         sortedNodeList = []
         blockList = []
-        if (self.r.exists(fileName)):
-            blockList = self.r.zrevrange(fileName, 0, -1)
+        if (self.r.sismember(self.savedSetFile, fileName)):
+            blockList = self.r.zrange(fileName, 0, -1)
             for block in blockList:
                 nodeList = list(self.r.smembers(block))
                 sortedNodeList.append(self.sortDataNode(nodeList))
-        return blockList, [[eval(self.r.hget(self.nodeHashName, node)) for node in blockNode] for blockNode in sortedNodeList]
+            return blockList, [[eval(self.r.hget(self.nodeHashName, node)) for node in blockNode] for blockNode in sortedNodeList]
+        return [], []
 
     def exposed_saveFile(self, fileName, count):
         '''
@@ -230,15 +245,18 @@ class NameNode(rpyc.Service):
         count：int
         返回列表[[ip,port],[ip,port],[ip,port],...,[ip,port]],
         '''
-        if (self.r.exists(fileName)):
-            blockList = self.r.zrevrange(fileName, 0, -1)
-            return blockList[count], self.getChunkNode(blockList[count])
-        self.r.sadd('savedFile', fileName)
         blockName = fileName + '-block-' + str(count)
+        # if(self.r.sismember(self.savedSetFile, fileName))
+        if (self.r.exists(blockName)):
+            # blockList = self.r.zrevrange(fileName, 0, -1)
+            # return blockList[count], self.getChunkNode(blockList[count])
+            return blockName, self.getChunkNode(blockName)
+
         nodeList = self.getBestNode(self.replicationCount)
         self.r.zadd(fileName, count, blockName)
         nodeInfoList = [eval(self.r.hget(self.nodeHashName, name))
                         for name in nodeList]
+        self.r.sadd(self.savedSetFile, fileName)
         return blockName, nodeInfoList
 
     def exposed_writeCheck(self, nodeName, blockName):
@@ -250,6 +268,30 @@ class NameNode(rpyc.Service):
         '''
         self.r.sadd(blockName, nodeName)
         self.r.sadd(nodeName, blockName)
+
+    def exposed_deleteCheck(self, nodename, blockName):
+        '''
+        删除完成后确认删除node存储的block和block
+        '''
+        self.r.srem(nodename, blockName)
+        self.r.delete(blockName)
+        fileName = blockName.split('-block-')[0]
+        self.r.delete(fileName)
+        self.r.srem(self.savedSetFile, fileName)
+
+    def exposed_listFile(self, node='all'):
+        '''
+        列出集群/结点上的所有文件 块数 总副本数量 有效副本数量
+        '''
+        if (node == 'all'):
+            allFile = self.getAllFileName()
+            allFileChunk = [self.getFileChunks(file) for file in allFile]
+            allFileChunkCount = [len(chunk) for chunk in allFileChunk]
+            allFileNodeCount = [len(self.getBlockNodes(
+                fileChunk[0])) for fileChunk in allFileChunk]
+            allFileLiveNodeCount = [len(self.getBlockLiveNodes(
+                fileChunk[0])) for fileChunk in allFileChunk]
+            return [allFile, allFileChunkCount, allFileNodeCount, allFileLiveNodeCount]
 
     def on_disconnect(self, conn):
         conn.close()

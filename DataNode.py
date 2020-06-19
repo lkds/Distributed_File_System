@@ -25,6 +25,8 @@ DATANODE_PATH = BASE_DIR+"/DataNode"
 # node1 node2 node3
 DEVICE_ID_FILE = 'DEVICE_LIST'
 
+CHUNK_SIZE = 4
+
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 DATE_FORMAT = "%m/%d/%Y %H:%M:%S %p"
 logging.basicConfig(filename='datanode.log', level=logging.DEBUG,
@@ -40,7 +42,7 @@ class DataNode(Service):
         self.nodeID = nodeID
         self.nodeIP = nodeIP
         self.nodePort = nodePort
-        self.chunkSize = 1024 * 1024 * 4
+        self.chunkSize = 1024 * 1024 * CHUNK_SIZE
         self.path = DATANODE_PATH+'/'+nodeID+'/'
 
         # self.startHeartBeat()
@@ -79,6 +81,9 @@ class DataNode(Service):
     def exposed_delete(self, chunkname):
         try:
             os.remove(self.path + chunkname)
+            conn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
+            conn.root.deleteCheck(self.nodeID, chunkname)
+            conn.close()
             return {'status': 1, 'description': 'Successfully delete {}'.format(chunkname)}
         except:
             logging.log(logging.DEBUG, 'try to remove file not exits!')

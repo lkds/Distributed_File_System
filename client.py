@@ -7,13 +7,15 @@ import argparse
 NAMENODE_HOST = '127.0.0.1'
 NAMENODE_PORT = 50001
 
+CHUNK_SIZE = 4
+
 BASE_DIR = str(os.getcwd()).replace('\\', '/')
 CLIENT_DATAPATH = BASE_DIR + '/ClientSpace/'
 
 
 class Client(Service):
     def __init__(self):
-        self.blocksize = 1024*1024*4
+        self.blocksize = 1024*1024*CHUNK_SIZE
         if not os.path.exists(CLIENT_DATAPATH):
             os.makedirs(CLIENT_DATAPATH)
         if not os.path.exists(CLIENT_DATAPATH+'/get'):
@@ -24,6 +26,18 @@ class Client(Service):
         设置单个文件块大小
         '''
         self.blockSize = size*1024*1024
+
+    def printInfo(self, name, data):
+        '''
+        打印信息
+        '''
+        for item in name:
+            print('{}\t'.format(item), end='')
+        print('')
+        for item in data:
+            for it in item:
+                print('{}\t'.format(it), end='')
+            print('')
 
     def put(self, filename):
         '''
@@ -43,6 +57,9 @@ class Client(Service):
                 inputfile.close()
                 break
             chunkname, DataNodeAlist = conn.root.saveFile(filename, count)
+            if (len(DataNodeAlist) == 0):
+                print('结点故障，请检查！')
+                return
             count += 1
             ##########################向DataNode写入########################
             con = rpyc.connect(DataNodeAlist[0][0], DataNodeAlist[0][1])
@@ -104,13 +121,23 @@ class Client(Service):
         else:
             print('删除成功！')
 
+    def listFiles(self, node='all'):
+        '''
+        显示文件
+        '''
+        con = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
+        fileInfo = con.root.listFile(node)
+        self.printInfo(['file', 'chunk count', 'node count',
+                        'active node count'], list(zip(*fileInfo)))
+        # print(fileInfo)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--put', type=str, default=None,
                         help='put the file int cluster')
     parser.add_argument('--ls', type=str, default=None,
-                        help='ls')                
+                        help='list file in the cluster')
     parser.add_argument('--get', type=str, default=None,
                         help='get file from cluster')
     parser.add_argument('--dele', type=str, default=None,
@@ -121,10 +148,10 @@ if __name__ == "__main__":
         client.put(args.put)
     elif (args.get):
         client.get(args.get)
-    elif (args.delete):
+    elif (args.dele):
         client.delete(args.dele)
     elif (args.ls):
-        client.delete(args.ls)
+        client.listFiles(args.ls)
 
-
-
+# client = Client()
+# client.put('v.zip')
