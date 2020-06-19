@@ -63,6 +63,7 @@ class NameNode(rpyc.Service):
             return res
         except:
             logging.log(logging.DEBUG, 'Connection failed！')
+            return 101
 
     def updateNode(self):
         '''
@@ -197,13 +198,24 @@ class NameNode(rpyc.Service):
 
     def getRestNode(self, block):
         '''
-        获取不含有block的结点列表，按照优先级排序
+        获取不含有block的活的结点列表，按照优先级排序
         '''
         nodeNameList = list(set(self.getAllNodeName()) -
                             set(self.getBlockNodes(block)))
         sortedNodeNameList = self.sortDataNode(nodeNameList)
+        # sortedLiveNodeNameList = list(
+        #     set(sortedNodeNameList) & set(self.getAllNodeName()))
         sortedNodeNameInfo = self.getNodesInfo(sortedNodeNameList)
         return sortedNodeNameInfo
+
+    def getBestLiveNodes(self, blockName):
+        '''
+        返回一组blockName最优的活的存储结点
+        '''
+        allBlockNode = self.getBlockNodes(blockName)
+        allLiveBlockNode = list(set(allBlockNode) & set(self.getAllNodeName()))
+        sortedAllLiveBlockNode = self.sortDataNode(allLiveBlockNode)
+        return sortedAllLiveBlockNode
 
     def copyToOtherNodes(self, nodeName):
         '''
@@ -214,8 +226,14 @@ class NameNode(rpyc.Service):
         for block in blockList:
             if(len(list(set(self.getAllNodeName()) & set(self.getBlockNodes(block)))) < self.replicationCount):
                 restNode = self.getRestNode(block)
-                originNode = self.getNodeInfo(self.getBlockNodes(block)[0])
-                conn = rpyc.connect(originNode[0], originNode[1])
+                originNodes = self.getBestLiveNodes(block)
+                if (len(originNodes) == 0):
+                    logging.log(
+                        logging.DEBUG, 'Living Node not enough, stop replicate for {}'.format(block))
+                    break
+                originNode = originNodes[0]
+                originNodeInfo = self.getNodeInfo(originNode)
+                conn = rpyc.connect(originNodeInfo[0], originNodeInfo[1])
                 conn.root.replicate(restNode, block)
                 conn.close()
 
@@ -234,7 +252,8 @@ class NameNode(rpyc.Service):
         if (self.r.sismember(self.savedSetFile, fileName)):
             blockList = self.r.zrange(fileName, 0, -1)
             for block in blockList:
-                nodeList = list(self.r.smembers(block))
+                nodeList = self.getBlockLiveNodes(block)
+                # nodeList = list(self.r.smembers(block))
                 sortedNodeList.append(self.sortDataNode(nodeList))
             return blockList, [[eval(self.r.hget(self.nodeHashName, node)) for node in blockNode] for blockNode in sortedNodeList]
         return [], []
