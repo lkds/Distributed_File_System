@@ -292,6 +292,9 @@ class NameNode(rpyc.Service):
             allFileLiveNodeCount = [len(self.getBlockLiveNodes(
                 fileChunk[0])) for fileChunk in allFileChunk]
             return [allFile, allFileChunkCount, allFileNodeCount, allFileLiveNodeCount]
+        elif (node == 'node'):
+            allNodeName = self.getAllNodeName()
+            return [allNodeName, [self.getNodeInfo(name) for name in allNodeName]]
 
     def on_disconnect(self, conn):
         conn.close()

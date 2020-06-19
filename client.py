@@ -44,7 +44,7 @@ class Client(Service):
         保存文件
         '''
         try:
-            inputfile = open(CLIENT_DATAPATH+'/'+filename,
+            inputfile = open(CLIENT_DATAPATH+filename,
                              'rb')  # open the fromfile
         except Exception as e:
             print(e)
@@ -121,14 +121,19 @@ class Client(Service):
         else:
             print('删除成功！')
 
-    def listFiles(self, node='all'):
+    def listFiles(self, node):
         '''
         显示文件
         '''
         con = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
         fileInfo = con.root.listFile(node)
-        self.printInfo(['file', 'chunk count', 'node count',
-                        'active node count'], list(zip(*fileInfo)))
+        if(node == 'all'):
+            self.printInfo(['file', 'chunk count', 'node count',
+                            'active node count'], list(zip(*fileInfo)))
+        elif (node == 'node'):
+
+            self.printInfo(['nodeID', 'IP\t', 'port'],
+                           [*zip(*[fileInfo[0], *zip(*fileInfo[1])])])
         # print(fileInfo)
 
 
