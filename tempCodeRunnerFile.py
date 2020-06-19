@@ -1,2 +1,2 @@
-            # print (linestrlist)
-            # linelist = map(int,linestrlist)# 方法一
+返回列表[[ip,port],[ip,port],[ip,port],...,[ip,port]],
+        '''
