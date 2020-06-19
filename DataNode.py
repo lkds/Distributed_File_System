@@ -12,10 +12,11 @@ from threading import Thread
 import time
 import logging
 
-NAMENODE_HOST = '127.0.0.1'
+NAMENODE_HOST = '192.168.43.52'
 NAMENODE_PORT = 50001
 
-DATANODE_HOST = '127.0.0.1'
+# DATANODE_HOST = '192.168.43.156'
+DATANODE_HOST = '192.168.43.52'
 DATANODE_START_PORT = 50002
 
 
@@ -55,21 +56,6 @@ class DataNode(Service):
     def getstatus(self):
 
         return random.randint(0, 100)+len(os.listdir(DATANODE_PATH))
-
-    # def heartBeat(self):
-    #     '''
-    #     心跳
-    #     '''
-    #     while (True):
-    #         time.sleep(10)
-    #         connn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
-    #         connn.root.activateNode(self.nodeID)
-    #         connn.close()
-
-    # def startHeartBeat(self):
-    #     t1 = Thread(target=self.heartBeat)
-    #     t1.start()
-    # 还活着函数
 
     def exposed_stillAlive(self):
         return self.getstatus()
@@ -169,19 +155,17 @@ def heatBeatThred(nodeinfo):
     '''
     发送心跳包
     '''
-    while(True):
-        try:
-            conn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
-
+    try:
+        conn = rpyc.connect(NAMENODE_HOST, NAMENODE_PORT)
+        while(True):
             if NodeStatus[nodeinfo[0]][0] == True:
                 conn.root.setNode(nodeinfo)
                 time.sleep(10)
             else:
-                conn.close()
                 break
-        except:
-            time.sleep(10)
-            logging.log(logging.DEBUG, 'namenode is dead！')
+    except:
+        conn.close()
+        logging.log(logging.DEBUG, 'namenode is dead！')
 
 
 def registerNode():
@@ -229,5 +213,8 @@ if __name__ == '__main__':
             print("输入节点名：格式如（node1）")
             node = input()
             stopNodeThread(node)
+        elif(n == 'q'):
+            break
+
         else:
             print("输入有误")
