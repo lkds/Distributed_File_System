@@ -4,7 +4,7 @@ from rpyc.utils.server import ThreadedServer
 import os
 import argparse
 
-NAMENODE_HOST = '127.0.0.1'
+NAMENODE_HOST = '192.168.43.52'
 NAMENODE_PORT = 50001
 
 CHUNK_SIZE = 4
